@@ -1,4 +1,4 @@
-import { Order, OrderItem, OrderStatusHistory, Address, Product, ProductImage } from '@prisma/client';
+import { Order, OrderItem, OrderStatusHistory, Address, Product, ProductImage, User } from '@prisma/client';
 
 export interface OrderResponseDTO {
   id: string;
@@ -31,12 +31,18 @@ export interface OrderResponseDTO {
     notes: string | null;
     createdAt: Date;
   }[];
+  user?: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
 }
 
 export type OrderWithDetails = Order & {
   address: Address;
   items: (OrderItem & { product: Product & { images: ProductImage[] } })[];
   statusHistory: OrderStatusHistory[];
+  user?: User | null;
 };
 
 export const formatOrderResponse = (order: OrderWithDetails): OrderResponseDTO => {
@@ -74,5 +80,10 @@ export const formatOrderResponse = (order: OrderWithDetails): OrderResponseDTO =
       notes: history.notes,
       createdAt: history.createdAt,
     })),
+    user: order.user ? {
+      id: order.user.id,
+      name: order.user.name,
+      email: order.user.email,
+    } : null,
   };
 };

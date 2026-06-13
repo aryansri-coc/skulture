@@ -9,22 +9,15 @@ import { QuotationCard } from '@/components/custom-requests/QuotationCard'
 import { formatDate } from '@/lib/utils'
 import { CustomRequestStatus, Quotation } from '@/lib/types'
 
-// Mock data
-const mockRequest = {
-  id: '1',
-  title: 'Custom Bracket Design',
-  description: 'Need a precision aluminum bracket with specific tolerances for mechanical assembly.',
-  status: 'QUOTED' as CustomRequestStatus,
-  files: ['bracket_design.stl', 'specifications.pdf'],
-  createdAt: new Date(Date.now() - 86400000).toISOString(),
-  quotation: {
-    id: '1',
-    amount: 5000,
-    validityDate: new Date(Date.now() + 604800000).toISOString(), // 7 days
-    specifications: 'Material: Aluminum 6061-T6\nDimensions: 150x100x50mm\nTolerance: ±0.5mm\nFinish: Anodized',
-    timeline: '5-7 business days',
-    status: 'PENDING' as any,
-  } as Quotation,
+import { use } from 'react'
+import { useCustomRequestDetail, useAcceptQuotation, useRejectQuotation } from '@/hooks/useCustomRequests'
+import { useQueryClient } from '@tanstack/react-query'
+
+function getRequestTitle(request: any) {
+  if (!request.requirements) return 'Custom Project'
+  const match = request.requirements.match(/Project Title:\s*([^\n]+)/)
+  if (match) return match[1].trim()
+  return request.description.substring(0, 30) + (request.description.length > 30 ? '...' : '')
 }
 
 export default function CustomRequestDetailPage({
@@ -32,7 +25,73 @@ export default function CustomRequestDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const request = mockRequest // TODO: Replace with actual API data
+  const { id } = use(params)
+  const queryClient = useQueryClient()
+  const { data: request, isLoading, error } = useCustomRequestDetail(id)
+  
+  const acceptMutation = useAcceptQuotation()
+  const rejectMutation = useRejectQuotation()
+
+  if (isLoading) {
+    return (
+      <main className="min-h-screen bg-background text-primary-text transition-colors duration-300 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-secondary-text">Loading request details...</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (error || !request) {
+    return (
+      <main className="min-h-screen bg-background text-primary-text transition-colors duration-300 flex items-center justify-center">
+        <div className="text-center max-w-md p-6 bg-card border border-border rounded-xl">
+          <p className="text-red-400 mb-4 font-semibold">Failed to load custom request details</p>
+          <Link href="/custom-requests" className="px-4 py-2 bg-white text-black rounded font-medium shadow">
+            Back to Requests
+          </Link>
+        </div>
+      </main>
+    )
+  }
+
+  const activeQuotation = request.quotations?.find(
+    (q: any) => q.status === 'PENDING' || q.status === 'ACCEPTED' || q.status === 'REJECTED'
+  )
+
+  const quotation = activeQuotation
+    ? {
+        id: activeQuotation.id,
+        amount: activeQuotation.price,
+        validityDate: activeQuotation.expiresAt,
+        specifications: activeQuotation.notes || '',
+        timeline: '5-7 business days',
+        status: activeQuotation.status,
+      }
+    : undefined
+
+  const handleAccept = async () => {
+    if (!quotation) return
+    try {
+      await acceptMutation.mutateAsync(quotation.id)
+      queryClient.invalidateQueries({ queryKey: ['customRequests'] })
+    } catch (err) {
+      console.error(err)
+      alert('Failed to accept quotation')
+    }
+  }
+
+  const handleReject = async () => {
+    if (!quotation) return
+    try {
+      await rejectMutation.mutateAsync(quotation.id)
+      queryClient.invalidateQueries({ queryKey: ['customRequests'] })
+    } catch (err) {
+      console.error(err)
+      alert('Failed to reject quotation')
+    }
+  }
 
   return (
     <main className="min-h-screen bg-background text-primary-text transition-colors duration-300">
@@ -60,11 +119,23 @@ export default function CustomRequestDetailPage({
             <div className="lg:col-span-2 space-y-8">
               {/* Header */}
               <div>
-                <h1 className="heading-2 text-primary-text mb-2">{request.title}</h1>
+                <h1 className="heading-2 text-primary-text mb-2">{getRequestTitle(request)}</h1>
                 <p className="text-secondary-text">
                   Submitted on {formatDate(request.createdAt)}
                 </p>
               </div>
+
+              {/* Status Alert for Reject/Cancel */}
+              {request.status === 'REJECTED' && (
+                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
+                  This quotation has been rejected. You can create a new request or contact support for help.
+                </div>
+              )}
+              {request.status === 'CANCELLED' && (
+                <div className="p-4 bg-gray-500/10 border border-gray-500/30 rounded-xl text-secondary-text text-sm">
+                  This custom project request has been cancelled.
+                </div>
+              )}
 
               {/* Description */}
               <div>
@@ -76,17 +147,27 @@ export default function CustomRequestDetailPage({
               <div>
                 <h2 className="heading-3 text-lg text-primary-text mb-3">Uploaded Files</h2>
                 <div className="space-y-2">
-                  {request.files.map((file) => (
-                    <div
-                      key={file}
-                      className="p-3 bg-secondary border border-border rounded-lg flex items-center"
-                    >
-                      <span className="w-8 h-8 bg-card border border-border rounded flex items-center justify-center mr-3">
-                        📄
-                      </span>
-                      <span className="text-primary-text text-sm">{file}</span>
-                    </div>
-                  ))}
+                  {request.files && request.files.length > 0 ? (
+                    request.files.map((file: any) => {
+                      const fileName = file.url.split('/').pop() || 'File'
+                      return (
+                        <a
+                          key={file.id}
+                          href={file.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-3 bg-secondary border border-border rounded-lg flex items-center hover:border-primary/20 smooth-transition"
+                        >
+                          <span className="w-8 h-8 bg-card border border-border rounded flex items-center justify-center mr-3">
+                            📄
+                          </span>
+                          <span className="text-primary-text text-sm hover:underline">{fileName}</span>
+                        </a>
+                      )
+                    })
+                  ) : (
+                    <p className="text-secondary-text text-sm">No files uploaded</p>
+                  )}
                 </div>
               </div>
 
@@ -105,9 +186,10 @@ export default function CustomRequestDetailPage({
                 transition={{ duration: 0.6, delay: 0.2 }}
               >
                 <QuotationCard
-                  quotation={request.quotation}
-                  onAccept={() => console.log('Accept')}
-                  onReject={() => console.log('Reject')}
+                  quotation={quotation}
+                  isLoading={acceptMutation.isPending || rejectMutation.isPending}
+                  onAccept={handleAccept}
+                  onReject={handleReject}
                 />
               </motion.div>
             </div>

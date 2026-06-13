@@ -5,7 +5,7 @@ import { AppError } from '../middlewares/error.middleware';
 export class AddressService {
   async getAddresses(userId: string): Promise<Address[]> {
     return prisma.address.findMany({
-      where: { userId },
+      where: { userId, isActive: true },
       orderBy: { isDefault: 'desc' },
     });
   }
@@ -21,7 +21,7 @@ export class AddressService {
       }
 
       // Check if this is the first address, set default automatically
-      const count = await tx.address.count({ where: { userId } });
+      const count = await tx.address.count({ where: { userId, isActive: true } });
       const isDefault = count === 0 ? true : !!data.isDefault;
 
       return tx.address.create({
@@ -33,6 +33,7 @@ export class AddressService {
           postalCode: data.postalCode,
           country: data.country,
           isDefault,
+          isActive: data.isActive !== undefined ? data.isActive : true,
         },
       });
     });
@@ -40,7 +41,7 @@ export class AddressService {
 
   async getAddressById(userId: string, id: string): Promise<Address> {
     const address = await prisma.address.findFirst({
-      where: { id, userId },
+      where: { id, userId, isActive: true },
     });
     if (!address) {
       throw new AppError(404, 'Address not found');
@@ -72,14 +73,29 @@ export class AddressService {
     const address = await this.getAddressById(userId, id);
 
     await prisma.$transaction(async (tx) => {
-      await tx.address.delete({
-        where: { id },
-      });
+      // Check if address is linked to any orders
+      const orderCount = await tx.order.count({ where: { addressId: id } });
+
+      if (orderCount > 0) {
+        // Soft delete by setting isActive: false, preserving it for order references
+        await tx.address.update({
+          where: { id },
+          data: {
+            isActive: false,
+            isDefault: false,
+          },
+        });
+      } else {
+        // Hard delete since there are no references
+        await tx.address.delete({
+          where: { id },
+        });
+      }
 
       // If we deleted the default address, set another one as default
       if (address.isDefault) {
         const nextAddress = await tx.address.findFirst({
-          where: { userId },
+          where: { userId, isActive: true },
         });
         if (nextAddress) {
           await tx.address.update({
@@ -96,7 +112,7 @@ export class AddressService {
 
     return prisma.$transaction(async (tx) => {
       await tx.address.updateMany({
-        where: { userId },
+        where: { userId, isActive: true },
         data: { isDefault: false },
       });
 

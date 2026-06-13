@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Navbar } from '@/components/layout/Navbar'
@@ -16,10 +17,20 @@ import { ProductCard } from '@/components/products/ProductCard'
 export default function OrdersPage() {
   const { data: orders, isLoading, error, refetch } = useOrders()
   const { data: recommendedProducts } = useProducts()
+  const [activeFilter, setActiveFilter] = useState<'all' | 'placed' | 'shipped' | 'delivered' | 'cancelled'>('all')
   
   const displayProducts = recommendedProducts
     ?.filter((p: any) => p.isActive && p.stock > 0)
     ?.slice(0, 4) || []
+
+  const filteredOrders = orders?.filter((order: any) => {
+    if (activeFilter === 'all') return true
+    const status = (order.status || 'PENDING').toUpperCase()
+    if (activeFilter === 'placed') {
+      return ['PENDING', 'CONFIRMED', 'PROCESSING'].includes(status)
+    }
+    return status === activeFilter.toUpperCase()
+  }) || []
 
   if (isLoading) {
     return (
@@ -88,58 +99,81 @@ export default function OrdersPage() {
       </div>
 
       <div className="py-12 md:py-16">
-        <div className="container mx-auto max-w-4xl px-4 md:px-6">
-          <div className="space-y-4">
-            {orders.map((order: any, index: number) => (
-              <motion.div
-                key={order.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-                className="glass-card p-6 hover:border-primary/50 smooth-transition cursor-pointer group"
-                onClick={() => window.location.href = `/orders/${order.id}`}
+        <div className="container mx-auto max-w-6xl px-4 md:px-6 space-y-6">
+          {/* Status Filter Tabs */}
+          <div className="flex flex-wrap gap-2 pb-6 border-b border-border">
+            {(['all', 'placed', 'shipped', 'delivered', 'cancelled'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`px-5 py-2.5 rounded-full text-xs font-black uppercase tracking-wider smooth-transition cursor-pointer border ${
+                  activeFilter === filter
+                    ? 'bg-primary text-white border-primary shadow-md shadow-primary/20'
+                    : 'bg-secondary text-secondary-text border-border hover:border-primary/40'
+                }`}
               >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    {/* Product Image Thumbnail */}
-                    {order.items && order.items[0] && (
-                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-secondary border border-border shrink-0">
-                        <img 
-                          src={order.items[0].image || '/placeholder.jpg'} 
-                          alt={order.items[0].name || 'Product'} 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <h3 className="font-semibold text-primary-text mb-1">
-                        {order.items?.map((item: any) => item.name).join(', ') || `Order #${order.orderNumber || order.id}`}
-                      </h3>
-                      <p className="text-xs text-muted-text">
-                        order id: #{order.orderNumber || order.id}
-                      </p>
-                      <p className="text-xs text-muted-text mt-1">
-                        Placed on {formatDate(order.createdAt)}
-                      </p>
-                      <div className="flex gap-4 mt-2">
-                        <span className="text-[10px] px-2.5 py-0.5 bg-secondary rounded capitalize font-bold text-secondary-text border border-border">
-                          {order.status || 'pending'}
-                        </span>
-                        <span className="text-xs text-secondary-text mt-0.5">
-                          {order.items?.length || 0} {order.items?.length === 1 ? 'item' : 'items'}
-                        </span>
+                {filter}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-5">
+            {filteredOrders.length === 0 ? (
+              <div className="text-center py-16 bg-card border border-border rounded-xl">
+                <p className="text-secondary-text font-medium text-sm">No orders found matching this filter.</p>
+              </div>
+            ) : (
+              filteredOrders.map((order: any, index: number) => (
+                <motion.div
+                  key={order.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                  className="glass-card p-8 hover:border-primary/50 smooth-transition cursor-pointer group"
+                  onClick={() => window.location.href = `/orders/${order.id}`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                    <div className="flex items-center gap-6">
+                      {/* Product Image Thumbnail */}
+                      {order.items && order.items[0] && (
+                        <div className="w-24 h-24 rounded-lg overflow-hidden bg-secondary border border-border shrink-0 shadow-sm">
+                          <img 
+                            src={order.items[0].image || '/placeholder.jpg'} 
+                            alt={order.items[0].name || 'Product'} 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <div>
+                        <h3 className="font-bold text-lg text-primary-text mb-1.5 group-hover:text-primary smooth-transition">
+                          {order.items?.map((item: any) => item.name).join(', ') || `Order #${order.orderNumber || order.id}`}
+                        </h3>
+                        <p className="text-sm text-muted-text font-medium">
+                          order id: #{order.orderNumber || order.id}
+                        </p>
+                        <p className="text-sm text-muted-text mt-1">
+                          Placed on {formatDate(order.createdAt)}
+                        </p>
+                        <div className="flex items-center gap-4 mt-3">
+                          <span className="text-xs px-3 py-1 bg-secondary rounded-md capitalize font-bold text-secondary-text border border-border uppercase tracking-wide">
+                            {order.status || 'pending'}
+                          </span>
+                          <span className="text-sm text-secondary-text font-medium">
+                            {order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0) || 0} {(order.items?.reduce((sum: number, item: any) => sum + (item.quantity || 1), 0) || 0) === 1 ? 'item' : 'items'}
+                          </span>
+                        </div>
                       </div>
                     </div>
+                    <div className="text-left sm:text-right flex flex-row sm:flex-col justify-between sm:justify-start items-center sm:items-end gap-2 shrink-0">
+                      <p className="text-2xl font-extrabold text-primary-text">{formatCurrency(order.totalAmount || order.total)}</p>
+                      <p className="text-sm font-semibold text-muted-text group-hover:text-primary smooth-transition sm:mt-3">
+                        View Details →
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xl font-semibold text-primary-text">{formatCurrency(order.totalAmount || order.total)}</p>
-                    <p className="text-xs text-muted-text mt-2 group-hover:text-primary smooth-transition">
-                      View Details →
-                    </p>
-                  </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              ))
+            )}
           </div>
 
           {displayProducts.length > 0 && (

@@ -7,26 +7,17 @@ import { Footer } from '@/components/layout/Footer'
 import { formatDate } from '@/lib/utils'
 import { CUSTOM_REQUEST_STATUS_LABELS } from '@/lib/constants'
 
-// Mock data for now
-const mockRequests = [
-  {
-    id: '1',
-    title: 'Custom Bracket Design',
-    description: 'Need a precision bracket...',
-    status: 'QUOTED',
-    createdAt: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    title: 'Prototype Housing',
-    description: 'Custom housing for project...',
-    status: 'UNDER_REVIEW',
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-  },
-]
+import { useCustomRequests } from '@/hooks/useCustomRequests'
+
+function getRequestTitle(request: any) {
+  if (!request.requirements) return 'Custom Project'
+  const match = request.requirements.match(/Project Title:\s*([^\n]+)/)
+  if (match) return match[1].trim()
+  return request.description.substring(0, 30) + (request.description.length > 30 ? '...' : '')
+}
 
 export default function CustomRequestsPage() {
-  const requests = mockRequests // TODO: Replace with actual API data
+  const { data: requests = [], isLoading, error } = useCustomRequests()
 
   return (
     <main className="min-h-screen bg-background text-primary-text transition-colors duration-300">
@@ -60,7 +51,17 @@ export default function CustomRequestsPage() {
       {/* Requests List */}
       <div className="py-12 md:py-16">
         <div className="container mx-auto px-4 md:px-6">
-          {requests.length === 0 ? (
+          {isLoading ? (
+            <div className="space-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="h-28 bg-card border border-border rounded-lg animate-pulse" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="text-center py-16 text-red-400">
+              Failed to load custom requests. Please try again.
+            </div>
+          ) : requests.length === 0 ? (
             <motion.div
               className="text-center py-16"
               initial={{ opacity: 0 }}
@@ -95,14 +96,14 @@ export default function CustomRequestsPage() {
                     <div className="flex justify-between items-start mb-4">
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-primary-text group-hover:text-primary smooth-transition">
-                          {request.title}
+                          {getRequestTitle(request)}
                         </h3>
                         <p className="text-secondary-text text-sm mt-1 line-clamp-1">
                           {request.description}
                         </p>
                       </div>
                       <span className="text-xs bg-secondary text-secondary-text px-3 py-1 rounded-full whitespace-nowrap ml-4">
-                        {CUSTOM_REQUEST_STATUS_LABELS[request.status as keyof typeof CUSTOM_REQUEST_STATUS_LABELS]}
+                        {CUSTOM_REQUEST_STATUS_LABELS[request.status as keyof typeof CUSTOM_REQUEST_STATUS_LABELS] || request.status}
                       </span>
                     </div>
                     <p className="text-muted-text text-xs">

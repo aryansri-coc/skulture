@@ -300,7 +300,7 @@ export default function AdminCategories() {
                     onDragOver={handleDrag}
                     onDragLeave={handleDrag}
                     onDrop={handleDrop}
-                    className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
+                    className={`relative border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
                       isDragActive 
                         ? 'border-primary bg-primary/5' 
                         : formData.imageUrl 
@@ -323,7 +323,7 @@ export default function AdminCategories() {
                               e.stopPropagation();
                               setFormData(prev => ({ ...prev, imageUrl: '' }))
                             }}
-                            className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full smooth-transition"
+                            className="absolute top-2 right-2 p-1.5 bg-red-600 hover:bg-red-700 text-white rounded-full smooth-transition z-10"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -355,13 +355,7 @@ export default function AdminCategories() {
                     />
                     <label
                       htmlFor="category-image-file"
-                      className="absolute inset-0 cursor-pointer"
-                      onClick={(e) => {
-                        // Prevent click event bubble to trigger input twice if we clicked the remove image button or similar
-                        if (formData.imageUrl) {
-                          e.preventDefault();
-                        }
-                      }}
+                      className="absolute inset-0 cursor-pointer z-0"
                     />
                   </div>
                 </div>

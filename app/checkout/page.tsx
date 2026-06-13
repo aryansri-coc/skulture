@@ -6,7 +6,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { Footer } from '@/components/layout/Footer'
 import Link from 'next/link'
 import { useSettings } from '@/context/SettingsContext'
-import { CreditCard, ShoppingBag, CheckCircle, ArrowRight, Loader2, MapPin } from 'lucide-react'
+import { CreditCard, ShoppingBag, CheckCircle, ArrowRight, Loader2, MapPin, Phone } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/context/AuthContext'
 
@@ -29,6 +29,9 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'CARD' | 'COD'>('CARD')
   const [codChargeVal, setCodChargeVal] = useState<number>(50)
   const [isLocating, setIsLocating] = useState(false)
+  const [savedAddresses, setSavedAddresses] = useState<any[]>([])
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('new')
+  const [saveAddressToProfile, setSaveAddressToProfile] = useState(true)
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -40,6 +43,28 @@ export default function CheckoutPage() {
     cardExpiry: '',
     cardCvc: '',
   })
+
+  const handleSelectSavedAddress = (addr: any) => {
+    setSelectedAddressId(addr.id)
+    setFormData(prev => ({
+      ...prev,
+      address: addr.street || '',
+      city: addr.city || '',
+      postalCode: addr.postalCode || '',
+      phone: addr.phone || '',
+    }))
+  }
+
+  const handleAddNewAddressClick = () => {
+    setSelectedAddressId('new')
+    setFormData(prev => ({
+      ...prev,
+      address: '',
+      city: '',
+      postalCode: '',
+      phone: '',
+    }))
+  }
   
   const { formatPrice } = useSettings()
   const { user, setUser } = useAuth()
@@ -74,7 +99,9 @@ export default function CheckoutPage() {
         .then(res => {
           const addresses = res.data.data
           if (addresses && addresses.length > 0) {
+            setSavedAddresses(addresses)
             const defAddr = addresses.find((a: any) => a.isDefault) || addresses[0]
+            setSelectedAddressId(defAddr.id)
             setFormData(prev => ({
               ...prev,
               address: defAddr.street || '',
@@ -84,7 +111,7 @@ export default function CheckoutPage() {
             }))
           }
         })
-        .catch(err => console.error('Error fetching default address:', err))
+        .catch(err => console.error('Error fetching addresses:', err))
     }
   }, [user])
 
@@ -160,10 +187,15 @@ export default function CheckoutPage() {
   }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    })
+    const { name, value } = e.target
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }))
+    // If the user starts editing shipping address fields, switch selection to 'new'
+    if (['address', 'city', 'postalCode', 'phone'].includes(name)) {
+      setSelectedAddressId('new')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,17 +213,21 @@ export default function CheckoutPage() {
         })
       }
 
-      // 2. Create address in database
-      const addressRes = await api.post('/addresses', {
-        street: formData.address,
-        city: formData.city,
-        state: 'N/A',
-        postalCode: formData.postalCode,
-        country: 'India',
-        phone: formData.phone || undefined,
-        isDefault: true
-      })
-      const addressId = addressRes.data.data.id
+      // 2. Resolve address ID
+      let addressId = selectedAddressId
+      if (selectedAddressId === 'new') {
+        const addressRes = await api.post('/addresses', {
+          street: formData.address,
+          city: formData.city,
+          state: 'N/A',
+          postalCode: formData.postalCode,
+          country: 'India',
+          phone: formData.phone || undefined,
+          isDefault: false,
+          isActive: saveAddressToProfile // If user wants to save to profile, it's active. Otherwise false (temporary/hidden).
+        })
+        addressId = addressRes.data.data.id
+      }
 
       // 3. Create the order
       await api.post('/orders', {
@@ -344,72 +380,147 @@ export default function CheckoutPage() {
                           placeholder="johndoe@example.com"
                         />
                       </div>
-                      <div className="sm:col-span-2">
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block">Address</label>
-                          <button
-                            type="button"
-                            onClick={handleGeolocation}
-                            disabled={isLocating}
-                            className="flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold cursor-pointer disabled:opacity-50"
-                          >
-                            {isLocating ? (
-                              <>
-                                <Loader2 className="w-3 h-3 animate-spin" /> Locating...
-                              </>
-                            ) : (
-                              <>
-                                <MapPin className="w-3.5 h-3.5" /> Locate Me
-                              </>
-                            )}
-                          </button>
+                      {savedAddresses.length > 0 && (
+                        <div className="sm:col-span-2 space-y-3 mb-2">
+                          <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block">Deliver to Saved Address</label>
+                          <div className="grid grid-cols-1 gap-3">
+                            {savedAddresses.map((addr) => (
+                              <div
+                                key={addr.id}
+                                onClick={() => handleSelectSavedAddress(addr)}
+                                className={`p-4 border rounded-xl cursor-pointer transition-all ${
+                                  selectedAddressId === addr.id
+                                    ? 'border-primary bg-primary/5'
+                                    : 'border-border bg-secondary hover:border-border/80'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="radio"
+                                      name="selectedAddress"
+                                      checked={selectedAddressId === addr.id}
+                                      onChange={() => handleSelectSavedAddress(addr)}
+                                      className="accent-primary"
+                                    />
+                                    <span className="text-xs font-bold text-primary-text capitalize">{formData.fullName}</span>
+                                    {addr.isDefault && (
+                                      <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded font-bold uppercase tracking-wider">Default</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="text-xs text-secondary-text mt-2 pl-5 space-y-1">
+                                  <p>{addr.street}</p>
+                                  <p>{addr.city}, {addr.postalCode}</p>
+                                  <p className="flex items-center gap-1 mt-1 text-[11px]"><Phone className="w-3 h-3" /> {addr.phone || 'N/A'}</p>
+                                </div>
+                              </div>
+                            ))}
+                            <div
+                              onClick={handleAddNewAddressClick}
+                              className={`p-4 border rounded-xl cursor-pointer transition-all ${
+                                selectedAddressId === 'new'
+                                  ? 'border-primary bg-primary/5'
+                                  : 'border-border bg-secondary hover:border-border/80'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="radio"
+                                  name="selectedAddress"
+                                  checked={selectedAddressId === 'new'}
+                                  onChange={handleAddNewAddressClick}
+                                  className="accent-primary"
+                                />
+                                <span className="text-xs font-bold text-primary-text">Add / Deliver to a new address</span>
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                        <input
-                          type="text"
-                          name="address"
-                          required
-                          value={formData.address}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
-                          placeholder="123 Street Name"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block mb-1">Phone Number</label>
-                        <input
-                          type="tel"
-                          name="phone"
-                          required
-                          value={formData.phone}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
-                          placeholder="e.g. +91 98765 43210"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block mb-1">City</label>
-                        <input
-                          type="text"
-                          name="city"
-                          required
-                          value={formData.city}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
-                          placeholder="Mumbai"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block mb-1">Postal Code (Pincode)</label>
-                        <input
-                          type="text"
-                          name="postalCode"
-                          required
-                          value={formData.postalCode}
-                          onChange={handleInputChange}
-                          className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
-                          placeholder="400001"
-                        />
-                      </div>
+                      )}
+
+                      {selectedAddressId === 'new' && (
+                        <>
+                          <div className="sm:col-span-2">
+                            <div className="flex justify-between items-center mb-1">
+                              <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block">Address</label>
+                              <button
+                                type="button"
+                                onClick={handleGeolocation}
+                                disabled={isLocating}
+                                className="flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold cursor-pointer disabled:opacity-50"
+                              >
+                                {isLocating ? (
+                                  <>
+                                    <Loader2 className="w-3 h-3 animate-spin" /> Locating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <MapPin className="w-3.5 h-3.5" /> Locate Me
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                            <input
+                              type="text"
+                              name="address"
+                              required
+                              value={formData.address}
+                              onChange={handleInputChange}
+                              className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
+                              placeholder="123 Street Name"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block mb-1">Phone Number</label>
+                            <input
+                              type="tel"
+                              name="phone"
+                              required
+                              value={formData.phone}
+                              onChange={handleInputChange}
+                              className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
+                              placeholder="e.g. +91 98765 43210"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block mb-1">City</label>
+                            <input
+                              type="text"
+                              name="city"
+                              required
+                              value={formData.city}
+                              onChange={handleInputChange}
+                              className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
+                              placeholder="Mumbai"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-secondary-text uppercase tracking-wider block mb-1">Postal Code (Pincode)</label>
+                            <input
+                              type="text"
+                              name="postalCode"
+                              required
+                              value={formData.postalCode}
+                              onChange={handleInputChange}
+                              className="w-full px-4 py-2 bg-secondary border border-border focus:border-primary rounded-lg text-primary-text focus:outline-none text-sm transition-all"
+                              placeholder="400001"
+                            />
+                          </div>
+                          <div className="sm:col-span-2 flex items-center gap-2 pt-2">
+                            <input
+                              type="checkbox"
+                              id="saveAddressToProfile"
+                              checked={saveAddressToProfile}
+                              onChange={(e) => setSaveAddressToProfile(e.target.checked)}
+                              className="rounded border-gray-300 dark:border-gray-750 text-primary focus:ring-primary w-4 h-4 cursor-pointer accent-primary"
+                            />
+                            <label htmlFor="saveAddressToProfile" className="text-xs font-bold text-secondary-text cursor-pointer select-none uppercase tracking-wider">
+                              Save address to my profile for future orders
+                            </label>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 

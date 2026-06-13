@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { motion } from 'framer-motion'
@@ -8,6 +8,8 @@ import { Navbar } from '@/components/layout/Navbar'
 import { Footer } from '@/components/layout/Footer'
 import { FileUploadDropzone } from '@/components/custom-requests/FileUploadDropzone'
 import { CustomRequestSchema } from '@/lib/validators'
+import { useAuth } from '@/context/AuthContext'
+import { api } from '@/lib/api'
 
 export default function CustomRequestPage() {
   const [files, setFiles] = useState<File[]>([])
@@ -15,15 +17,28 @@ export default function CustomRequestPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitSuccess, setSubmitSuccess] = useState(false)
 
+  const { user } = useAuth()
   const {
     register,
     handleSubmit,
     formState: { errors, isValid },
     watch,
+    setValue,
   } = useForm({
     resolver: zodResolver(CustomRequestSchema),
     mode: 'onChange',
+    defaultValues: {
+      title: '',
+      description: '',
+      phone: user?.phone || '',
+    }
   })
+
+  useEffect(() => {
+    if (user?.phone) {
+      setValue('phone', user.phone)
+    }
+  }, [user, setValue])
 
   const title = watch('title')
   const description = watch('description')
@@ -43,33 +58,42 @@ export default function CustomRequestPage() {
     setUploadProgress(0)
 
     try {
-      // Simulate file upload with progress
-      const interval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 95) {
-            clearInterval(interval)
-            return prev
-          }
-          return prev + Math.random() * 30
+      const uploadedFiles = []
+      const totalFiles = files.length
+
+      for (let i = 0; i < totalFiles; i++) {
+        const file = files[i]
+        const uploadFormData = new FormData()
+        uploadFormData.append('file', file)
+
+        const res = await api.post('/upload/custom-file', uploadFormData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
         })
-      }, 200)
 
-      // TODO: Submit to API
-      // const formData = new FormData()
-      // formData.append('title', data.title)
-      // formData.append('description', data.description)
-      // files.forEach(file => formData.append('files', file))
-      // await api.post(ENDPOINTS.CUSTOM_REQUESTS, formData)
+        if (res.data?.success && res.data?.data) {
+          const ext = file.name.split('.').pop() || 'stl'
+          uploadedFiles.push({
+            url: res.data.data.url,
+            fileType: ext
+          })
+        }
+        setUploadProgress(((i + 1) / totalFiles) * 100)
+      }
 
-      setUploadProgress(100)
-      clearInterval(interval)
+      await api.post('/custom-requests', {
+        description: data.description,
+        requirements: `Project Title: ${data.title}`,
+        phone: data.phone,
+        files: uploadedFiles,
+      })
 
-      setTimeout(() => {
-        setSubmitSuccess(true)
-        setIsSubmitting(false)
-      }, 500)
+      setSubmitSuccess(true)
+      setIsSubmitting(false)
     } catch (error) {
-      console.error('Upload failed:', error)
+      console.error('Custom request submission failed:', error)
+      alert('Failed to submit custom request. Please check your network and try again.')
       setIsSubmitting(false)
       setUploadProgress(0)
     }
@@ -185,6 +209,21 @@ export default function CustomRequestPage() {
                     />
                     {errors.title && (
                       <p className="text-red-400 text-sm mt-1">{(errors.title as any)?.message}</p>
+                    )}
+                  </div>
+
+                  {/* Phone Number */}
+                  <div>
+                    <label className="block text-sm font-medium text-primary-text mb-2">Your Phone Number</label>
+                    <input
+                      type="tel"
+                      placeholder="e.g., +91 98765 43210"
+                      {...register('phone')}
+                      className="w-full px-4 py-3 bg-secondary border border-border rounded-lg text-primary-text placeholder-muted-text focus:outline-none focus:border-primary/40 smooth-transition"
+                      disabled={isSubmitting}
+                    />
+                    {errors.phone && (
+                      <p className="text-red-400 text-sm mt-1">{(errors.phone as any)?.message}</p>
                     )}
                   </div>
 

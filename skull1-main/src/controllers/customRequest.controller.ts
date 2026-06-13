@@ -128,6 +128,20 @@ export class CustomRequestController {
       next(error);
     }
   }
+
+  async convertToOrder(req: Request, res: Response, next: NextFunction) {
+    try {
+      const id = req.params.id;
+      const order = await customRequestService.convertToOrder(id);
+      res.status(200).json({
+        success: true,
+        message: 'Custom request successfully converted to an Order',
+        data: order,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export default CustomRequestController;

@@ -26,22 +26,24 @@ export const MAX_FILES_PER_REQUEST = 5
 
 // Custom Request Status Labels
 export const CUSTOM_REQUEST_STATUS_LABELS: Record<string, string> = {
-  SUBMITTED: 'Submitted',
-  UNDER_REVIEW: 'Under Review',
+  PENDING: 'Pending Review',
+  REVIEWED: 'Reviewed',
   QUOTED: 'Quoted',
   ACCEPTED: 'Accepted',
-  PRINTING: 'Printing',
+  REJECTED: 'Rejected',
   COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
 }
 
 // Custom Request Status Colors
 export const CUSTOM_REQUEST_STATUS_COLORS: Record<string, string> = {
-  SUBMITTED: 'bg-blue-500',
-  UNDER_REVIEW: 'bg-yellow-500',
+  PENDING: 'bg-yellow-500',
+  REVIEWED: 'bg-blue-500',
   QUOTED: 'bg-purple-500',
   ACCEPTED: 'bg-green-500',
-  PRINTING: 'bg-orange-500',
+  REJECTED: 'bg-red-500',
   COMPLETED: 'bg-green-600',
+  CANCELLED: 'bg-gray-500',
 }
 
 // Order Status Labels

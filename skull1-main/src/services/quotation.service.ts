@@ -1,7 +1,7 @@
 import { QuotationRepository } from '../repositories/quotation.repository';
 import { CustomRequestRepository } from '../repositories/customRequest.repository';
 import { AppError } from '../middlewares/error.middleware';
-import { QuotationStatus, CustomRequestStatus } from '@prisma/client';
+import { QuotationStatus, CustomRequestStatus, InquiryStatus, Role } from '@prisma/client';
 import { prisma } from '../config/database';
 
 const quotationRepository = new QuotationRepository();
@@ -106,6 +106,32 @@ export class QuotationService {
         where: { id: data.customRequestId },
         data: { status: CustomRequestStatus.QUOTED },
       });
+
+      // Notify customer via support notification
+      const user = await tx.user.findUnique({
+        where: { id: customRequest.userId },
+      });
+
+      if (user) {
+        const inquiry = await tx.inquiry.create({
+          data: {
+            userId: user.id,
+            name: user.name || 'Customer',
+            email: user.email,
+            subject: 'Custom Request Quoted',
+            message: `Your custom request has been quoted! Price: Rs. ${data.price}. Please check your Custom Projects dashboard to review details.`,
+            status: InquiryStatus.PENDING,
+          },
+        });
+
+        await tx.inquiryMessage.create({
+          data: {
+            inquiryId: inquiry.id,
+            senderRole: Role.ADMIN,
+            message: `Your custom request has been quoted! Price: Rs. ${data.price}. Please check your Custom Projects dashboard to accept or reject this quote.`,
+          },
+        });
+      }
 
       return q;
     });

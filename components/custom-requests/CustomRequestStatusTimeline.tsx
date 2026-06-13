@@ -5,16 +5,15 @@ import { CUSTOM_REQUEST_STATUS_LABELS } from '@/lib/constants'
 import { CustomRequestStatus } from '@/lib/types'
 
 const statusOrder = [
-  'SUBMITTED',
-  'UNDER_REVIEW',
+  'PENDING',
+  'REVIEWED',
   'QUOTED',
   'ACCEPTED',
-  'PRINTING',
   'COMPLETED',
 ]
 
 interface CustomRequestStatusTimelineProps {
-  currentStatus: CustomRequestStatus
+  currentStatus: any
 }
 
 export const CustomRequestStatusTimeline = ({

@@ -9,6 +9,7 @@ export class OrderRepository {
       where: { id },
       include: {
         address: true,
+        user: true,
         items: {
           include: {
             product: {
@@ -30,6 +31,7 @@ export class OrderRepository {
       where: { orderNumber },
       include: {
         address: true,
+        user: true,
         items: {
           include: {
             product: {
@@ -82,6 +84,7 @@ export class OrderRepository {
         where,
         include: {
           address: true,
+          user: true,
           items: {
             include: {
               product: {

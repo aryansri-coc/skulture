@@ -27,6 +27,7 @@ adminCustomRequestRouter.use(protect, restrictToAdmin);
 adminCustomRequestRouter.get('/', controller.getAllCustomRequests);
 adminCustomRequestRouter.get('/:id', controller.getCustomRequestById);
 adminCustomRequestRouter.patch('/:id', validate(updateCustomRequestSchema), controller.updateCustomRequest);
+adminCustomRequestRouter.post('/:id/convert-to-order', controller.convertToOrder);
 adminCustomRequestRouter.delete('/:id', controller.deleteCustomRequest);
 
 export default router;
